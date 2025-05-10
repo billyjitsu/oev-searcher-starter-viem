@@ -1,14 +1,9 @@
 import {
   createWalletClient,
   http,
-  parseEther,
-  WalletClient,
   Hex,
   Address,
   createPublicClient,
-  parseAbi,
-  TransactionReceipt,
-  Chain,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { deploymentAddresses } from "@api3/contracts";
@@ -73,6 +68,7 @@ async function deployContract() {
     DAPP_ID, // _dappId
     deploymentAddresses.Api3ServerV1OevExtension["4913"] as Address, // _api3ServerV1OevExtension address
   ];
+  console.log("Constructor arguments:", constructorArgs);
 
   try {
     // Deploy the contract and get the transaction hash
