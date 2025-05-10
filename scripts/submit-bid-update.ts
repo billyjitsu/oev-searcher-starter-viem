@@ -29,8 +29,8 @@ import {
   import { privateKeyToAccount } from "viem/accounts";
   import { deploymentAddresses } from "@api3/contracts";
   import { fetchOEVSignedData } from "./fetch-oevsigneddata";
-  import OevAuctionHouseAbi from "../abis/OevAuctionHouse.json";
-  import OevFeedUpdaterAbi from "../abis/OevFeedUpdater.json";
+  import OevAuctionHouseAbi from "../artifacts/@api3/contracts/api3-server-v1/OevAuctionHouse.sol/OevAuctionHouse.json";
+  import OevFeedUpdaterAbi from "../artifacts/contracts/OevFeedUpdater.sol/OevFeedUpdater.json";
   import deployments from "../deployments/deployments.json";
   import "dotenv/config";
   
@@ -46,7 +46,7 @@ import {
   const DAPI_NAME = process.env.DAPI_NAME || "ETH/USD"; // Default: ETH/USD
   
   // Contract ABIs
-  const OevAuctionHouseABI = OevAuctionHouseAbi; // Import the ABI from the JSON file
+  const OevAuctionHouseABI = OevAuctionHouseAbi.abi; // Import the ABI from the JSON file
   const OevFeedUpdaterABI = OevFeedUpdaterAbi.abi; // Import the ABI from the JSON file
   
   interface OevChain extends Chain {
@@ -236,8 +236,8 @@ import {
       [PayBidAndUpdateFeeds],
       {
         value: parseEther(BID_AMOUNT),
-        maxFeePerGas: parseGwei('5'),
-        maxPriorityFeePerGas: parseGwei('1'),
+        // maxFeePerGas: parseGwei('5'),
+        // maxPriorityFeePerGas: parseGwei('1'),
       }
     );
   
