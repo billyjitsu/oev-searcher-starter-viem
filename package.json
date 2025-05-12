@@ -4,8 +4,9 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "deploy": "ts-node scripts/deploy-oevfeedupdater.ts",
-    "bid": "ts-node scripts/submit-bid-update.ts"
+    "deposit-collateral": "ts-node scripts/deposit-collateral.ts",
+    "deploy-oevfeedupdater": "ts-node scripts/deploy-oevfeedupdater.ts",
+    "submit-bid-update": "ts-node scripts/submit-bid-update.ts"
   },
   "devDependencies": {
     "@api3/contracts": "^21.1.0",

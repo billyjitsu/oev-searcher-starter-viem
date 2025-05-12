@@ -10,20 +10,13 @@ import {
     parseAbiParameters,
     parseEther,
     maxUint256,
-    getAddress,
     Address,
     Hex,
-    PublicClient,
-    WalletClient,
     Chain,
     decodeEventLog,
-    BlockNumber,
-    parseUnits,
     parseGwei,
-    parseEventLogs,
     TransactionReceipt,
     parseAbiItem,
-    decodeAbiParameters,
     concat,
   } from "viem";
   import { privateKeyToAccount } from "viem/accounts";
@@ -59,8 +52,6 @@ import {
       };
     };
   }
-  
-  //  type PriceUpdateDetailsEncoded = Hex;
   
   interface PayBidAndUpdateFeeds {
     signedDataTimestampCutoff: number;
@@ -99,7 +90,7 @@ import {
   };
   
   const targetNetwork: Chain = {
-    id: Number(process.env.TARGET_NETWORK_CHAIN_ID),
+    id: 100,  // Replace with your Chain ID
     name: "Target Network",
     nativeCurrency: {
       decimals: 18,
@@ -195,7 +186,6 @@ import {
   }
   
   function getBidDetails(OevFeedUpdaterAddress: Address): Hex {
-    // Just generate random bytes and convert to hex, don't apply keccak256
     const nonce = toHex(crypto.getRandomValues(new Uint8Array(32)));
     return encodeAbiParameters(parseAbiParameters("address, bytes32"), [
       OevFeedUpdaterAddress,
@@ -208,9 +198,7 @@ import {
     signedDataTimestampCutoff: number,
     priceUpdateDetailsEncoded: Hex[]
   ): Promise<TransactionReceipt> {
-    console.log("Original signature:", awardedSignature);
     
-    // Create the struct for the contract function
     const PayBidAndUpdateFeeds: PayBidAndUpdateFeeds = {
       signedDataTimestampCutoff,
       signature: awardedSignature,
@@ -231,20 +219,52 @@ import {
       },
     });
     
-    // Send the transaction using the contract directly - no custom data modifications
+    // Estimate gas with a safety buffer
+    let estimatedGas;
+    try {
+      estimatedGas = await targetNetworkPublic.estimateContractGas({
+        address: deployments.OevFeedUpdater as Address,
+        abi: OevFeedUpdaterABI,
+        functionName: 'payBidAndUpdateFeed',
+        args: [PayBidAndUpdateFeeds],
+        account: account.address,
+        value: parseEther(BID_AMOUNT),
+      });
+      
+      // Add a 30% buffer to the estimated gas
+      estimatedGas = (estimatedGas * 130n) / 100n;
+      console.log(`Estimated gas with 30% buffer: ${estimatedGas}`);
+    } catch (error) {
+      console.log("Gas estimation failed, using fallback gas limit");
+      // Fallback to a reasonably high value if estimation fails
+      estimatedGas = 3000000n;
+    }
+    
+    // Get current fee data
+    const feeData = await targetNetworkPublic.estimateFeesPerGas();
+    
     const updateHash = await OevFeedUpdater.write.payBidAndUpdateFeed(
       [PayBidAndUpdateFeeds],
       {
         value: parseEther(BID_AMOUNT),
-        // maxFeePerGas: parseGwei('5'),
-        // maxPriorityFeePerGas: parseGwei('1'),
+        gas: estimatedGas,
+        // Use appropriate fee values if available, otherwise use defaults
+        ...(feeData.maxFeePerGas && {
+          maxFeePerGas: feeData.maxFeePerGas,
+          maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || parseGwei('1'),
+        }),
+        // Fallback to gasPrice if EIP-1559 not available
+        ...(!feeData.maxFeePerGas && {
+          gasPrice: await targetNetworkPublic.getGasPrice(),
+        }),
       }
     );
-  
+    
+    console.log("Oracle update sent, Tx Hash:", updateHash);
     const updateReceipt = await targetNetworkPublic.waitForTransactionReceipt({
       hash: updateHash,
     });
-    console.log("Oracle update performed, Tx Hash:", updateHash);
+    console.log("Oracle update confirmed, used gas:", updateReceipt.gasUsed?.toString());
     return updateReceipt;
   }
   async function reportFulfillment(
@@ -284,7 +304,7 @@ import {
           const logs = await oevNetworkPublic.getLogs({
             address: deploymentAddresses.OevAuctionHouse["4913"] as Address,
             event: parseAbiItem(
-              "event ConfirmedFulfillment(address indexed bidder, bytes32 indexed bidTopic, bytes32 indexed bidId, bytes payload, uint32 timestamp)"
+              "event ConfirmedFulfillment(address indexed bidder, bytes32 indexed bidTopic, bytes32 indexed bidId, uint256 bidderBalance, uint256 accumulatedProtocolFees)"
             ),
             fromBlock,
             toBlock: currentBlock,
@@ -307,7 +327,7 @@ import {
   
     return confirmedFulfillmentTx;
   }
-  
+
   async function placeBid(): Promise<void> {
     // Fetch the OEV signed data to bid on
     const { priceUpdateDetailsEncoded, medianPrice } = await fetchOEVSignedData(DAPI_NAME);
@@ -381,9 +401,8 @@ import {
           bigint, // collateralAmount
           bigint // protocolFeeAmount
         ];
-        // console.log("Bids from object:", bid);
+
         const status = bid[0];
-        // console.log("Bid Status", status);
   
         if (BigInt(status) === 2n) {
           console.log("Bid Awarded");
@@ -409,14 +428,11 @@ import {
               data: logs[0].data,
               topics: logs[0].topics,
             });
-            // console.log("Decoded Log", decodedLog);
   
             // Get signature from event args
             if (decodedLog.eventName === "AwardedBid" && decodedLog.args) {
-              // const signature = decodedLog.args[3] as Hex;
               const eventArgs = decodedLog.args as unknown as AwardedBidEventArgs;
               const signature = eventArgs.awardDetails as Hex;
-              console.log("Awarded Signature", signature);
               resolve(signature);
               break;
             }
@@ -425,11 +441,6 @@ import {
         await new Promise((r) => setTimeout(r, 100));
       }
     });
-  
-    //log out awarded signature, signedDataTimestampCutoff, and priceupdateArray
-    console.log("Awarded Signature:", awardedSignature);
-    // console.log("Signed Data Timestamp Cutoff:", signedDataTimestampCutoff);
-    // console.log("Price Update Details Encoded:", priceUpdateDetailsEncoded);
   
     const priceUpdateArray: Hex[] =
       priceUpdateDetailsEncoded;
